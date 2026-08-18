@@ -1,7 +1,9 @@
 import { dbConnect } from "@/lib/db";
-import { errorResponse, successResponse } from "@/lib/response";
+import { errorResponse } from "@/lib/response";
+import { AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS, signJWT } from "@/lib/auth";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
@@ -24,55 +26,63 @@ export async function POST(req: Request) {
     }).select("+password");
 
     if (!user) {
-      return errorResponse(
-        "ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।",
-        401
-      );
+      return errorResponse("ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।", 401);
     }
-    
+
     if (user.status !== "active") {
       return errorResponse(
-        "আপনার অ্যাকাউন্ট বর্তমানে নিষ্ক্রিয় রয়েছে।",
+        "আপনার অ্যাকাউন্ট বর্তমানে নিষ্ক্রিয় রয়েছে। অ্যাডমিনের সাথে যোগাযোগ করুন।",
         403
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      return errorResponse(
-        "ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।",
-        401
-      );
+      return errorResponse("ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।", 401);
     }
 
-    // Login successful
-    return successResponse(
-      "সফলভাবে লগইন হয়েছে।",
+    // Generate JWT token
+    const token = await signJWT({
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      instituteName: user.instituteName,
+    });
+
+    const userData = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      instituteName: user.instituteName,
+      packageId: user.packageId,
+      role: user.role,
+      status: user.status,
+      image: user.image,
+    };
+
+    // Create JSON response
+    const response = NextResponse.json(
       {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        mobile: user.mobile,
-        instituteName: user.instituteName,
-        packageId: user.packageId,
-        role: user.role,
-        status: user.status,
-        image: user.image,
-      }
-    );
-  } catch (error) {
-    console.error(
-      "❌ লগইন করতে সমস্যা হয়েছে:",
-      error
+        success: true,
+        message: "সফলভাবে লগইন হয়েছে।",
+        data: userData,
+      },
+      { status: 200 }
     );
 
-    return errorResponse(
-      "লগইন করতে একটি সমস্যা হয়েছে।",
-      500
-    );
+    // Set secure HttpOnly cookie
+    response.cookies.set({
+      ...AUTH_COOKIE_OPTIONS,
+      value: token,
+    });
+
+    return response;
+  } catch (error) {
+    console.error("❌ লগইন করতে সমস্যা হয়েছে:", error);
+
+    return errorResponse("লগইন করতে একটি সমস্যা হয়েছে।", 500);
   }
-}
+}

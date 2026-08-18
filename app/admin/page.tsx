@@ -1,18 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-// ✅ আপনার রিয়েল Next.js প্রজেক্টে ব্যবহারের জন্য নিচের লাইনটি আনকমেন্ট (Uncomment) করুন:
-// import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Users, CreditCard, MessageSquare, Star, 
   Settings, LogOut, Plus, Edit, Trash2, Eye, EyeOff, Menu, X, 
   CheckCircle2, XCircle, MoreVertical, Search, Filter, Receipt, DollarSign, Download, Printer, Bell, Shield, Lock, Calendar
 } from 'lucide-react';
-
-// ⚠️ শুধুমাত্র এই লাইভ প্রিভিউ পরিবেশের জন্য কাস্টম রাউটার (আপনার আসল প্রজেক্টে এটি মুছে ফেলবেন):
-const useRouter = () => ({
-  push: (url: string) => console.log('Redirecting to:', url)
-});
 
 interface User {
   id: string;
@@ -292,11 +286,17 @@ export default function AdminDashboardPage() {
     showToast('অ্যাডমিন সেটিংস সফলভাবে আপডেট করা হয়েছে!');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (e) {
+      console.error(e);
+    }
     showToast('লগআউট সফল হয়েছে...');
     setTimeout(() => {
       router.push('/login');
-    }, 1000);
+      router.refresh();
+    }, 500);
   };
 
   if (!mounted) return <div className="min-h-screen bg-slate-50 dark:bg-slate-900"></div>;

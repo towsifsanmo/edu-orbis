@@ -31,11 +31,13 @@ export default function Login() {
 
       if (res.ok) {
         setMessage({ type: 'success', text: data.message || 'সফলভাবে লগইন হয়েছে! রিডাইরেক্ট করা হচ্ছে...' });
+        const targetUrl = data.data?.role === 'admin' ? '/admin' : '/dashboard';
         setTimeout(() => {
-          router.push('/dashboard');
-        }, 1500);
+          router.push(targetUrl);
+          router.refresh();
+        }, 1000);
       } else {
-        setMessage({ type: 'error', text: data.error || 'লগইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।' });
+        setMessage({ type: 'error', text: data.message || data.error || 'লগইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।' });
         setIsLoading(false);
       }
     } catch (error) {
@@ -109,13 +111,13 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-6">
             
             {/* Error Message */}
-            {message.text && (
+            {message.type === 'error' && message.text && (
               <div className="flex items-start p-4 mb-4 text-sm text-red-800 border border-red-300 rounded-xl bg-red-50 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800">
                 <AlertCircle className="w-5 h-5 mr-2 shrink-0" />
                 <span>{message.text}</span>
               </div>
             )}
-            {message.text && (
+            {message.type === 'success' && message.text && (
               <div className="flex items-start p-4 mb-4 text-sm text-emerald-800 border border-emerald-300 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
                 <CheckCircle2 className="w-5 h-5 mr-2 shrink-0" />
                 <span>{message.text}</span>
