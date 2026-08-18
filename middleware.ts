@@ -16,13 +16,21 @@ export async function middleware(request: NextRequest) {
     "/api/create-plan",
     "/api/edit-plan",
     "/api/delete-plan",
+    "/api/users",
+    "/api/billing",
+    "/api/leads",
+    "/api/testimonials",
+    "/api/settings",
   ];
 
   const isApiAdminRoute =
     pathname.startsWith("/api/(admin)") ||
     pathname.startsWith("/api/admin") ||
-    adminApiEndpoints.some((endpoint) => pathname.startsWith(endpoint));
+    adminApiEndpoints.some(
+      (endpoint) => pathname === endpoint || pathname.startsWith(`${endpoint}/`)
+    );
 
+  const isApiUserRoute = pathname.startsWith("/api/user");
   const isAdminPageRoute = pathname.startsWith("/admin");
   const isDashboardRoute = pathname.startsWith("/dashboard");
   const isLoginRoute = pathname === "/login";
@@ -52,7 +60,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Protect Admin Web Page routes
+  // 2. Protect User API routes
+  if (isApiUserRoute) {
+    if (!isAuthenticated) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "অননুমোদিত অ্যাক্সেস। অনুগ্রহ করে লগইন করুন।",
+        },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.next();
+  }
+
+  // 3. Protect Admin Web Page routes
   if (isAdminPageRoute) {
     if (!isAuthenticated) {
       const loginUrl = new URL("/login", request.url);
@@ -72,7 +95,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3. Protect User Dashboard routes
+  // 4. Protect User Dashboard routes
   if (isDashboardRoute) {
     if (!isAuthenticated) {
       const loginUrl = new URL("/login", request.url);
@@ -87,7 +110,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 4. Redirect already authenticated users away from /login
+  // 5. Redirect already authenticated users away from /login
   if (isLoginRoute && isAuthenticated) {
     if (isAdmin) {
       return NextResponse.redirect(new URL("/admin", request.url));
@@ -108,9 +131,14 @@ export const config = {
     "/api/create-plan/:path*",
     "/api/edit-plan/:path*",
     "/api/delete-plan/:path*",
+    "/api/users/:path*",
+    "/api/billing/:path*",
+    "/api/leads/:path*",
+    "/api/testimonials/:path*",
+    "/api/settings/:path*",
     "/api/admin/:path*",
     "/api/\\(admin\\)/:path*",
+    "/api/user/:path*",
     "/login",
   ],
 };
-

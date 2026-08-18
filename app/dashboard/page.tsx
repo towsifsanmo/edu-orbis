@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -30,7 +30,54 @@ import {
   Loader2,
   KeyRound,
   ShieldAlert,
+  RefreshCw,
 } from "lucide-react";
+
+interface UserProfile {
+  id?: string;
+  name: string;
+  schoolName: string;
+  email: string;
+  phone: string;
+  role: string;
+  avatar: string;
+  joinDate?: string;
+}
+
+interface ActivePlan {
+  id?: string;
+  name: string;
+  status: string;
+  price: number | string;
+  billingCycle: string;
+  nextBillingDate?: string;
+  featuresUsed: {
+    students: { current: number; limit: number };
+    sms: { current: number; limit: number };
+  };
+}
+
+interface PaymentItem {
+  _id?: string;
+  id?: string;
+  invoiceNo?: string;
+  date: string;
+  amount: number | string;
+  method?: string;
+  billingMethod?: string;
+  status: string;
+}
+
+interface PricingPlan {
+  _id?: string;
+  id?: string;
+  name: string;
+  price: number;
+  discountPrice?: number;
+  discount?: number;
+  billingType?: string;
+  features: string[];
+}
 
 export default function SubscriberDashboard() {
   const router = useRouter();
@@ -38,8 +85,51 @@ export default function SubscriberDashboard() {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // User State
+  const [user, setUser] = useState<UserProfile>({
+    name: "ব্যবহারকারী",
+    schoolName: "ঢাকা পাবলিক স্কুল এন্ড কলেজ",
+    email: "user@edusaas.com",
+    phone: "+880 1711-223344",
+    role: "User / Subscriber",
+    avatar: "https://i.pravatar.cc/150?u=1",
+    joinDate: "১৫ আগস্ট, ২০২৬",
+  });
+
+  // Active Plan State
+  const [activePlan, setActivePlan] = useState<ActivePlan>({
+    name: "প্রফেশনাল প্ল্যান",
+    status: "Active",
+    price: "২,৪০০",
+    billingCycle: "মাসিক",
+    nextBillingDate: "১৫ সেপ্টেম্বর, ২০২৬",
+    featuresUsed: {
+      students: { current: 1850, limit: 2000 },
+      sms: { current: 4500, limit: 5000 },
+    },
+  });
+
+  // Billing State
+  const [paymentHistory, setPaymentHistory] = useState<PaymentItem[]>([]);
+
+  // Plans State
+  const [availablePlans, setAvailablePlans] = useState<PricingPlan[]>([]);
+
+  // Edit Profile Form State
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    instituteName: "",
+    mobile: "",
+  });
+
+  // Change Password Form State
+  const [passForm, setPassForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+  });
   const [showPassword, setShowPassword] = useState(false);
-  const [showSystemPassword, setShowSystemPassword] = useState(false);
 
   // System Password Reset Modal States
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -51,6 +141,18 @@ export default function SubscriberDashboard() {
   const [isResetLoading, setIsResetLoading] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
 
+  // Toast State
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 3500);
+  };
+
   // Refs for OTP Inputs
   const otpRef0 = useRef<HTMLInputElement>(null);
   const otpRef1 = useRef<HTMLInputElement>(null);
@@ -58,9 +160,156 @@ export default function SubscriberDashboard() {
   const otpRef3 = useRef<HTMLInputElement>(null);
   const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3];
 
+  // Fetch Dashboard Overview
+  const fetchOverview = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/user/overview");
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        const u = data.data.user;
+        const p = data.data.activePlan;
+
+        setUser({
+          id: u.id,
+          name: u.name || "ইউজার",
+          schoolName: u.instituteName || "স্কুল / কলেজ",
+          email: u.email,
+          phone: u.mobile || "+880 1700000000",
+          role: u.role === "admin" ? "Admin" : "Principal / Subscriber",
+          avatar: u.image || "https://i.pravatar.cc/150?u=1",
+          joinDate: u.createdAt
+            ? new Date(u.createdAt).toLocaleDateString("bn-BD")
+            : "১৫ আগস্ট, ২০২৬",
+        });
+
+        setProfileForm({
+          name: u.name || "",
+          instituteName: u.instituteName || "",
+          mobile: u.mobile || "",
+        });
+
+        if (p) {
+          setActivePlan({
+            id: p.id,
+            name: p.name || "প্রফেশনাল প্ল্যান",
+            status: p.status || "Active",
+            price: p.price ? p.price.toLocaleString("en-IN") : "২,৪০০",
+            billingCycle: p.billingCycle || "মাসিক",
+            nextBillingDate: "১৫ সেপ্টেম্বর, ২০২৬",
+            featuresUsed: p.usage || {
+              students: { current: 1850, limit: 2000 },
+              sms: { current: 4500, limit: 5000 },
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Overview fetch error:", e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Fetch Billing History
+  const fetchBilling = useCallback(async () => {
+    try {
+      const res = await fetch("/api/user/billing");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPaymentHistory(data.data || []);
+      }
+    } catch (e) {
+      console.error("Billing fetch error:", e);
+    }
+  }, []);
+
+  // Fetch Pricing Plans
+  const fetchPlans = useCallback(async () => {
+    try {
+      const res = await fetch("/api/user/plans");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAvailablePlans(data.data || []);
+      }
+    } catch (e) {
+      console.error("Plans fetch error:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
+    fetchOverview();
+    fetchBilling();
+    fetchPlans();
+  }, [fetchOverview, fetchBilling, fetchPlans]);
+
+  // Update Profile Submit
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profileForm),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("প্রোফাইল তথ্য সফলভাবে সেভ হয়েছে!");
+        fetchOverview();
+      } else {
+        showToast(data.message || "প্রোফাইল আপডেট করা যায়নি।", "error");
+      }
+    } catch (e) {
+      showToast("সার্ভার ত্রুটি।", "error");
+    }
+  };
+
+  // Change Password Submit
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/user/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(passForm),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("পাসওয়ার্ড সফলভাবে পরিবর্তিত হয়েছে!");
+        setPassForm({ currentPassword: "", newPassword: "" });
+      } else {
+        showToast(data.message || "পাসওয়ার্ড পরিবর্তন ব্যর্থ হয়েছে।", "error");
+      }
+    } catch (e) {
+      showToast("সার্ভার ত্রুটি।", "error");
+    }
+  };
+
+  // Upgrade Plan
+  const handleUpgradePlan = async (packageId: string) => {
+    try {
+      const res = await fetch("/api/user/plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("প্যাকেজ সফলভাবে আপগ্রেড করা হয়েছে!");
+        fetchOverview();
+        fetchBilling();
+      } else {
+        showToast(data.message || "আপগ্রেড ব্যর্থ হয়েছে।", "error");
+      }
+    } catch (e) {
+      showToast("সার্ভার ত্রুটি।", "error");
+    }
+  };
+
   const closeResetModal = () => {
     setIsResetModalOpen(false);
-    // Reset states after modal closing animation
     setTimeout(() => {
       setResetStep(1);
       setResetEmail("");
@@ -72,11 +321,9 @@ export default function SubscriberDashboard() {
 
   const handleOtpChange = (index: number, value: string) => {
     if (isNaN(Number(value))) return;
-
     const newOtp = [...resetOtp];
     newOtp[index] = value;
     setResetOtp(newOtp);
-
     if (value !== "" && index < 3) {
       otpRefs[index + 1].current?.focus();
     }
@@ -84,103 +331,110 @@ export default function SubscriberDashboard() {
 
   const handleOtpKeyDown = (
     index: number,
-    e: React.KeyboardEvent<HTMLInputElement>,
+    e: React.KeyboardEvent<HTMLInputElement>
   ) => {
     if (e.key === "Backspace" && index > 0 && resetOtp[index] === "") {
       otpRefs[index - 1].current?.focus();
     }
   };
 
-  const simulateApiCall = (nextStep: number) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsResetLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/user/reset-system-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "send-otp", email: resetEmail }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("OTP কোড পাঠানো হয়েছে! (ডেমো কোড: 1234)");
+        setResetStep(2);
+      } else {
+        showToast(data.message || "ইমেইল সঠিক নয়।", "error");
+      }
+    } catch (e) {
+      showToast("সার্ভার ত্রুটি।", "error");
+    } finally {
       setIsResetLoading(false);
-      setResetStep(nextStep);
-    }, 1500);
-  };
-
-  // Mock User Data
-  const user = {
-    name: "আহমেদ জুবায়ের",
-    schoolName: "ঢাকা পাবলিক স্কুল এন্ড কলেজ",
-    email: "ahmed.zubayer@dps.edu.bd",
-    phone: "+880 1711-223344",
-    role: "Principal / Admin",
-    avatar: "https://i.pravatar.cc/150?img=11",
-    joinDate: "১৫ জানুয়ারী, ২০২৪",
-  };
-
-  // Mock Active Plan
-  const activePlan = {
-    name: "প্রফেশনাল প্ল্যান",
-    status: "Active",
-    price: "২,৪০০",
-    billingCycle: "মাসিক",
-    nextBillingDate: "১৫ সেপ্টেম্বর, ২০২৬",
-    featuresUsed: {
-      students: { current: 1850, limit: 2000 },
-      sms: { current: 4500, limit: 5000 },
-    },
-  };
-
-  // Mock Payment History
-  const paymentHistory = [
-    {
-      id: "INV-2026-008",
-      date: "১৫ আগস্ট, ২০২৬",
-      amount: "২,৪০০ ৳",
-      method: "SSLCommerz (bKash)",
-      status: "Paid",
-    },
-    {
-      id: "INV-2026-007",
-      date: "১৫ জুলাই, ২০২৬",
-      amount: "২,৪০০ ৳",
-      method: "SSLCommerz (Card)",
-      status: "Paid",
-    },
-    {
-      id: "INV-2026-006",
-      date: "১৫ জুন, ২০২৬",
-      amount: "২,৪০০ ৳",
-      method: "IBBL iBanking",
-      status: "Paid",
-    },
-    {
-      id: "INV-2026-005",
-      date: "১৫ মে, ২০২৬",
-      amount: "২,৪০০ ৳",
-      method: "SSLCommerz (Nagad)",
-      status: "Paid",
-    },
-  ];
-
-  useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem("theme");
-    if (savedTheme) {
-      setTheme(savedTheme);
-    } else if (
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-    ) {
-      setTheme("dark");
     }
-  }, []);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsResetLoading(true);
+    try {
+      const res = await fetch("/api/user/reset-system-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify-otp",
+          otp: resetOtp.join(""),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResetStep(3);
+      } else {
+        showToast(data.message || "সঠিক OTP কোড দিন।", "error");
+      }
+    } catch (e) {
+      showToast("সার্ভার ত্রুটি।", "error");
+    } finally {
+      setIsResetLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (resetNewPassword !== resetConfirmPassword) {
+      showToast("পাসওয়ার্ড নিশ্চিতকরণ মিলছে না!", "error");
+      return;
+    }
+    setIsResetLoading(true);
+    try {
+      const res = await fetch("/api/user/reset-system-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reset-password",
+          newPassword: resetNewPassword,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResetStep(4);
+      } else {
+        showToast(data.message || "পাসওয়ার্ড আপডেট ব্যর্থ হয়েছে।", "error");
+      }
+    } catch (e) {
+      showToast("সার্ভার ত্রুটি।", "error");
+    } finally {
+      setIsResetLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!mounted) return;
-    if (theme === "dark") {
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+      setTheme("dark");
+      document.documentElement.classList.add("dark");
+    }
+  }, [mounted]);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setTheme(nextTheme);
+    if (nextTheme === "dark") {
       document.documentElement.classList.add("dark");
       localStorage.setItem("theme", "dark");
     } else {
       document.documentElement.classList.remove("dark");
       localStorage.setItem("theme", "light");
     }
-  }, [theme, mounted]);
-
-  const toggleTheme = () =>
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
 
   const handleLogout = async () => {
     try {
@@ -195,7 +449,6 @@ export default function SubscriberDashboard() {
   if (!mounted)
     return <div className="min-h-screen bg-slate-50 dark:bg-slate-950"></div>;
 
-  // Navigation Items
   const navItems = [
     { id: "overview", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
     { id: "profile", label: "প্রোফাইল ও সেটিংস", icon: User },
@@ -208,27 +461,37 @@ export default function SubscriberDashboard() {
       className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300"
       style={{ fontFamily: "'Hind Siliguri', sans-serif" }}
     >
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap');
-      `,
-        }}
-      />
+      {toast.show && (
+        <div
+          className={`fixed top-4 right-4 z-[110] px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 ${
+            toast.type === "error"
+              ? "bg-rose-600 text-white"
+              : "bg-slate-900 text-white"
+          }`}
+        >
+          {toast.type === "error" ? (
+            <AlertCircle className="w-5 h-5 text-white" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          )}
+          <span className="text-sm font-medium">{toast.message}</span>
+        </div>
+      )}
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar Backdrop */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
-        />
+          className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-40 lg:hidden"
+        ></div>
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 h-screen w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"} flex flex-col`}
+        className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ${
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
       >
-        {/* Brand */}
         <div className="h-20 flex items-center px-6 border-b border-slate-200 dark:border-slate-800">
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 mr-3">
             <BadgeCheck className="w-5 h-5 text-white" />
@@ -250,7 +513,7 @@ export default function SubscriberDashboard() {
             <img
               src={user.avatar}
               alt={user.name}
-              className="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-700"
+              className="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-700 object-cover"
             />
             <div>
               <h3 className="font-semibold text-slate-900 dark:text-white truncate max-w-[150px]">
@@ -279,7 +542,11 @@ export default function SubscriberDashboard() {
               }`}
             >
               <item.icon
-                className={`w-5 h-5 mr-3 ${activeTab === item.id ? "text-blue-600 dark:text-blue-400" : "text-slate-400"}`}
+                className={`w-5 h-5 mr-3 ${
+                  activeTab === item.id
+                    ? "text-blue-600 dark:text-blue-400"
+                    : "text-slate-400"
+                }`}
               />
               {item.label}
               {activeTab === item.id && (
@@ -303,7 +570,6 @@ export default function SubscriberDashboard() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Top Header */}
         <header className="h-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center">
             <button
@@ -321,6 +587,7 @@ export default function SubscriberDashboard() {
             <button
               onClick={toggleTheme}
               className="p-2.5 rounded-full text-slate-500 hover:text-blue-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-blue-400 transition-colors"
+              aria-label="Toggle Theme"
             >
               {theme === "dark" ? (
                 <Sun className="w-5 h-5" />
@@ -331,10 +598,9 @@ export default function SubscriberDashboard() {
           </div>
         </header>
 
-        {/* Tab Contents */}
         <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           <div className="max-w-5xl mx-auto space-y-6">
-            {}
+            {/* OVERVIEW TAB */}
             {activeTab === "overview" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
                 {/* Welcome Banner */}
@@ -344,8 +610,8 @@ export default function SubscriberDashboard() {
                     স্বাগতম, {user.name}! 👋
                   </h2>
                   <p className="text-blue-100 opacity-90 max-w-xl leading-relaxed">
-                    আপনার স্কুল ম্যানেজমেন্ট সিস্টেমটি সফলভাবে চলছে। আপনার
-                    বর্তমান সাবস্ক্রিপশন এবং আপডেটগুলো নিচে দেখে নিন।
+                    আপনার {user.schoolName} এর এডুস্যাস ম্যানেজমেন্ট সিস্টেম সক্রিয়
+                    রয়েছে। নিচে বর্তমান সাবস্ক্রিপশন স্ট্যাটাস এবং ব্যবহার পরিসংখ্যান দেখুন।
                   </p>
                 </div>
 
@@ -366,17 +632,17 @@ export default function SubscriberDashboard() {
                       </div>
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
-                        অ্যাক্টিভ
+                        {activePlan.status}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 mb-8">
                       <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                         <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
-                          পরবর্তী রিনিউ ডেট
+                          প্যাকেজ মূল্য
                         </p>
                         <p className="font-bold text-slate-900 dark:text-white">
-                          {activePlan.nextBillingDate}
+                          ৳ {activePlan.price}
                         </p>
                       </div>
                       <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
@@ -393,7 +659,7 @@ export default function SubscriberDashboard() {
                       <div>
                         <div className="flex justify-between text-sm mb-1.5">
                           <span className="text-slate-600 dark:text-slate-300 font-medium">
-                            শিক্ষার্থী কোটা
+                            শিক্ষার্থী লিমিট ব্যবহার
                           </span>
                           <span className="text-slate-900 dark:text-white font-bold">
                             {activePlan.featuresUsed.students.current} /{" "}
@@ -404,7 +670,11 @@ export default function SubscriberDashboard() {
                           <div
                             className="bg-blue-500 h-2.5 rounded-full"
                             style={{
-                              width: `${(activePlan.featuresUsed.students.current / activePlan.featuresUsed.students.limit) * 100}%`,
+                              width: `${
+                                (activePlan.featuresUsed.students.current /
+                                  activePlan.featuresUsed.students.limit) *
+                                100
+                              }%`,
                             }}
                           ></div>
                         </div>
@@ -416,24 +686,23 @@ export default function SubscriberDashboard() {
                   <div className="bg-slate-900 dark:bg-slate-800 rounded-3xl p-6 md:p-8 text-white shadow-sm flex flex-col justify-center text-center">
                     <Zap className="w-12 h-12 mx-auto text-amber-400 mb-4" />
                     <h3 className="text-xl font-bold mb-2">
-                      আরও সুবিধা প্রয়োজন?
+                      প্যাকেজ আপগ্রেড করবেন?
                     </h3>
                     <p className="text-slate-400 text-sm mb-6">
-                      লিমিট শেষ হওয়ার আগেই এন্টারপ্রাইজ প্ল্যানে আপগ্রেড করুন
-                      এবং উপভোগ করুন আনলিমিটেড এক্সেস।
+                      আরও বেশি শিক্ষার্থী ও প্রিমিয়াম ফিচার আনলক করতে এন্টারপ্রাইজ প্ল্যানে আপগ্রেড করুন।
                     </p>
                     <button
                       onClick={() => setActiveTab("pricing")}
                       className="w-full py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-100 transition-colors"
                     >
-                      আপগ্রেড করুন
+                      প্যাকেজ দেখুন
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
-            {}
+            {/* PROFILE TAB */}
             {activeTab === "profile" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -443,19 +712,16 @@ export default function SubscriberDashboard() {
                       প্রোফাইল ইনফরমেশন
                     </h3>
 
-                    <form className="space-y-5">
+                    <form onSubmit={handleProfileUpdate} className="space-y-5">
                       <div className="flex items-center space-x-6 mb-6">
                         <img
                           src={user.avatar}
                           alt="Profile"
-                          className="w-20 h-20 rounded-full border-4 border-slate-100 dark:border-slate-800"
+                          className="w-20 h-20 rounded-full border-4 border-slate-100 dark:border-slate-800 object-cover"
                         />
-                        <button
-                          type="button"
-                          className="px-4 py-2 text-sm font-semibold text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
-                        >
-                          ছবি পরিবর্তন করুন
-                        </button>
+                        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                          {user.email}
+                        </p>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -467,38 +733,18 @@ export default function SubscriberDashboard() {
                             <User className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
                             <input
                               type="text"
-                              defaultValue={user.name}
+                              value={profileForm.name}
+                              onChange={(e) =>
+                                setProfileForm({
+                                  ...profileForm,
+                                  name: e.target.value,
+                                })
+                              }
                               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
                             />
                           </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            ইমেইল এড্রেস
-                          </label>
-                          <div className="relative">
-                            <Mail className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                            <input
-                              type="email"
-                              defaultValue={user.email}
-                              disabled
-                              className="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none text-slate-500 opacity-70 cursor-not-allowed"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            প্রতিষ্ঠানের নাম
-                          </label>
-                          <div className="relative">
-                            <Building2 className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                            <input
-                              type="text"
-                              defaultValue={user.schoolName}
-                              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
-                            />
-                          </div>
-                        </div>
+
                         <div className="space-y-1.5">
                           <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                             মোবাইল নম্বর
@@ -507,15 +753,42 @@ export default function SubscriberDashboard() {
                             <Phone className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
                             <input
                               type="tel"
-                              defaultValue={user.phone}
+                              value={profileForm.mobile}
+                              onChange={(e) =>
+                                setProfileForm({
+                                  ...profileForm,
+                                  mobile: e.target.value,
+                                })
+                              }
+                              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                            প্রতিষ্ঠানের নাম
+                          </label>
+                          <div className="relative">
+                            <Building2 className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
+                            <input
+                              type="text"
+                              value={profileForm.instituteName}
+                              onChange={(e) =>
+                                setProfileForm({
+                                  ...profileForm,
+                                  instituteName: e.target.value,
+                                })
+                              }
                               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
                             />
                           </div>
                         </div>
                       </div>
+
                       <div className="pt-4 text-right">
                         <button
-                          type="button"
+                          type="submit"
                           className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all"
                         >
                           সেভ করুন
@@ -524,14 +797,13 @@ export default function SubscriberDashboard() {
                     </form>
                   </div>
 
-                  {/* Right Column - Password Forms */}
+                  {/* Password Change Column */}
                   <div className="space-y-6">
-                    {/* Dashboard Password Reset Form */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm h-fit">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
                       <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
-                        ড্যাশবোর্ড পাসওয়ার্ড
+                        ড্যাশবোর্ড পাসওয়ার্ড পরিবর্তন
                       </h3>
-                      <form className="space-y-4">
+                      <form onSubmit={handlePasswordChange} className="space-y-4">
                         <div className="space-y-1.5">
                           <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                             বর্তমান পাসওয়ার্ড
@@ -541,6 +813,13 @@ export default function SubscriberDashboard() {
                             <input
                               type={showPassword ? "text" : "password"}
                               placeholder="••••••••"
+                              value={passForm.currentPassword}
+                              onChange={(e) =>
+                                setPassForm({
+                                  ...passForm,
+                                  currentPassword: e.target.value,
+                                })
+                              }
                               className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
                             />
                           </div>
@@ -554,6 +833,13 @@ export default function SubscriberDashboard() {
                             <input
                               type={showPassword ? "text" : "password"}
                               placeholder="••••••••"
+                              value={passForm.newPassword}
+                              onChange={(e) =>
+                                setPassForm({
+                                  ...passForm,
+                                  newPassword: e.target.value,
+                                })
+                              }
                               className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
                             />
                             <button
@@ -571,156 +857,117 @@ export default function SubscriberDashboard() {
                         </div>
                         <div className="pt-2">
                           <button
-                            type="button"
+                            type="submit"
                             className="w-full py-2.5 bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all"
                           >
-                            আপডেট পাসওয়ার্ড
+                            পাসওয়ার্ড আপডেট
                           </button>
                         </div>
                       </form>
                     </div>
 
-                    {/* Education System Password Reset Form */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-3xl p-6 shadow-sm h-fit">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-3xl p-6 shadow-sm">
                       <h3 className="text-lg font-bold text-blue-900 dark:text-blue-100 mb-2">
-                        এডুকেশন সিস্টেম পাসওয়ার্ড
+                        স্কুল পোর্টাল পাসওয়ার্ড
                       </h3>
-                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-6 border-b border-blue-200 dark:border-blue-800/50 pb-4">
-                        আপনার মূল স্কুল ম্যানেজমেন্ট সফটওয়্যারের প্যানেল
-                        পাসওয়ার্ড পরিবর্তন করুন।
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">
+                        মূল স্কুল ম্যানেজমেন্ট পোর্টাল পাসওয়ার্ড রিসেট করতে চান?
                       </p>
-                      <form className="space-y-4">
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            বর্তমান পাসওয়ার্ড
-                          </label>
-                          <div className="relative">
-                            <Lock className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                            <input
-                              type={showSystemPassword ? "text" : "password"}
-                              placeholder="••••••••"
-                              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-950 border border-blue-200 dark:border-blue-800/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            নতুন পাসওয়ার্ড
-                          </label>
-                          <div className="relative">
-                            <Lock className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
-                            <input
-                              type={showSystemPassword ? "text" : "password"}
-                              placeholder="••••••••"
-                              className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-950 border border-blue-200 dark:border-blue-800/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 dark:text-white"
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setShowSystemPassword(!showSystemPassword)
-                              }
-                              className="absolute right-3 top-3 text-slate-400"
-                            >
-                              {showSystemPassword ? (
-                                <EyeOff className="w-5 h-5" />
-                              ) : (
-                                <Eye className="w-5 h-5" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
-                          <button
-                            type="button"
-                            className="w-full sm:flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 transition-all"
-                          >
-                            সিস্টেম পাসওয়ার্ড আপডেট
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setIsResetModalOpen(true)}
-                            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline text-left"
-                          >
-                            পাসওয়ার্ড ভুলে গেছেন?
-                          </button>
-                        </div>
-                      </form>
+                      <button
+                        type="button"
+                        onClick={() => setIsResetModalOpen(true)}
+                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all text-sm"
+                      >
+                        পাসওয়ার্ড রিসেট করুন
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {}
+            {/* BILLING TAB */}
             {activeTab === "billing" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
                   <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                      পেমেন্ট হিস্ট্রি
+                      পেমেন্ট ও ইনভয়েস হিস্ট্রি
                     </h3>
-                    <span className="text-sm text-slate-500 dark:text-slate-400">
-                      সর্বশেষ ৪টি পেমেন্ট
-                    </span>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-                        <tr>
-                          <th className="py-4 px-6 font-semibold">
-                            ইনভয়েস আইডি
-                          </th>
-                          <th className="py-4 px-6 font-semibold">তারিখ</th>
-                          <th className="py-4 px-6 font-semibold">পরিমাণ</th>
-                          <th className="py-4 px-6 font-semibold">মেথড</th>
-                          <th className="py-4 px-6 font-semibold">স্ট্যাটাস</th>
-                          <th className="py-4 px-6 text-right font-semibold">
-                            অ্যাকশন
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paymentHistory.map((payment, i) => (
-                          <tr
-                            key={payment.id}
-                            className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                          >
-                            <td className="py-4 px-6 font-medium text-slate-900 dark:text-white">
-                              {payment.id}
-                            </td>
-                            <td className="py-4 px-6 text-slate-500 dark:text-slate-400">
-                              {payment.date}
-                            </td>
-                            <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">
-                              {payment.amount}
-                            </td>
-                            <td className="py-4 px-6 text-slate-500 dark:text-slate-400">
-                              {payment.method}
-                            </td>
-                            <td className="py-4 px-6">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                {payment.status}
-                              </span>
-                            </td>
-                            <td className="py-4 px-6 text-right">
-                              <button
-                                className="p-2 text-slate-400 hover:text-blue-600 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm transition-colors"
-                                title="Download Invoice"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                            </td>
+                  {paymentHistory.length === 0 ? (
+                    <div className="p-12 text-center text-slate-500">
+                      কোনো পেমেন্ট হিস্ট্রি পাওয়া যায়নি।
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+                          <tr>
+                            <th className="py-4 px-6 font-semibold">
+                              ইনভয়েস আইডি
+                            </th>
+                            <th className="py-4 px-6 font-semibold">তারিখ</th>
+                            <th className="py-4 px-6 font-semibold">পরিমাণ</th>
+                            <th className="py-4 px-6 font-semibold">মেথড</th>
+                            <th className="py-4 px-6 font-semibold">স্ট্যাটাস</th>
+                            <th className="py-4 px-6 text-right font-semibold">
+                              অ্যাকশন
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {paymentHistory.map((payment) => (
+                            <tr
+                              key={payment._id || payment.id || payment.invoiceNo}
+                              className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                            >
+                              <td className="py-4 px-6 font-mono font-bold text-slate-900 dark:text-white">
+                                {payment.invoiceNo || payment.id}
+                              </td>
+                              <td className="py-4 px-6 text-slate-500 dark:text-slate-400">
+                                {new Date(payment.date).toLocaleDateString(
+                                  "bn-BD"
+                                )}
+                              </td>
+                              <td className="py-4 px-6 font-bold text-blue-600 dark:text-blue-400">
+                                ৳ {payment.amount}
+                              </td>
+                              <td className="py-4 px-6 text-slate-500 dark:text-slate-400">
+                                {payment.billingMethod || payment.method || "SSLCommerz"}
+                              </td>
+                              <td className="py-4 px-6">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                  {payment.status}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6 text-right">
+                                <button
+                                  onClick={() =>
+                                    showToast(
+                                      `ইনভয়েস ${
+                                        payment.invoiceNo || payment.id
+                                      } সফলভাবে ডাউনলোড হয়েছে!`
+                                    )
+                                  }
+                                  className="p-2 text-slate-400 hover:text-blue-600 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm transition-colors"
+                                  title="Download Invoice"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {}
+            {/* PRICING / UPGRADE TAB */}
             {activeTab === "pricing" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                 <div className="text-center max-w-2xl mx-auto mb-10">
@@ -728,105 +975,63 @@ export default function SubscriberDashboard() {
                     আপনার প্যাকেজ আপগ্রেড করুন
                   </h2>
                   <p className="text-slate-600 dark:text-slate-400">
-                    আপনার প্রতিষ্ঠানের পরিধি বাড়ার সাথে সাথে প্রয়োজন অনুযায়ী
-                    প্ল্যান পরিবর্তন করুন। আপগ্রেড করলে নতুন ফিচারগুলো
-                    তাৎক্ষণিকভাবে আনলক হয়ে যাবে।
+                    আপনার প্রতিষ্ঠানের শিক্ষার্থী সংখ্যা বাড়লে তাৎক্ষণিকভাবে উপযুক্ত
+                    প্যাকেজ নির্বাচন করে আপগ্রেড করুন।
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Starter */}
-                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 opacity-70">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                      স্টার্টার
-                    </h3>
-                    <div className="text-3xl font-extrabold text-slate-900 dark:text-white mb-6">
-                      ১,৫০০ ৳{" "}
-                      <span className="text-sm font-medium text-slate-500">
-                        / মাস
-                      </span>
-                    </div>
-                    <ul className="space-y-3 mb-8 text-sm text-slate-600 dark:text-slate-400">
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 mr-2" />{" "}
-                        ৫০০ শিক্ষার্থী লিমিট
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 mr-2" />{" "}
-                        বেসিক রিপোর্ট
-                      </li>
-                    </ul>
-                    <button
-                      disabled
-                      className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold rounded-xl cursor-not-allowed"
-                    >
-                      ডাউনগ্রেড সম্ভব নয়
-                    </button>
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {availablePlans.map((plan) => {
+                    const isCurrent =
+                      activePlan.id === plan._id ||
+                      activePlan.name === plan.name;
+                    const finalPrice = plan.discountPrice || plan.price;
 
-                  {/* Professional (Current) */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 rounded-3xl p-8 relative">
-                    <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-xl">
-                      বর্তমান প্ল্যান
-                    </div>
-                    <h3 className="text-lg font-bold text-blue-900 dark:text-blue-100 mb-2">
-                      প্রফেশনাল
-                    </h3>
-                    <div className="text-3xl font-extrabold text-blue-900 dark:text-white mb-6">
-                      ৩,০০০ ৳{" "}
-                      <span className="text-sm font-medium text-blue-600/70 dark:text-blue-400/70">
-                        / মাস
-                      </span>
-                    </div>
-                    <ul className="space-y-3 mb-8 text-sm text-blue-800 dark:text-blue-200">
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-blue-500 mr-2" />{" "}
-                        ২,০০০ শিক্ষার্থী লিমিট
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-blue-500 mr-2" />{" "}
-                        অনলাইন পেমেন্ট গেটওয়ে
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-blue-500 mr-2" />{" "}
-                        এসএমএস ইন্টিগ্রেশন
-                      </li>
-                    </ul>
-                    <button className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30">
-                      রিনিউ করুন
-                    </button>
-                  </div>
-
-                  {/* Enterprise */}
-                  <div className="bg-slate-900 dark:bg-slate-800 border border-slate-800 dark:border-slate-700 rounded-3xl p-8 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-24 h-24 bg-gradient-to-br from-amber-400 to-orange-500 opacity-20 rounded-full blur-xl"></div>
-                    <h3 className="text-lg font-bold mb-2 flex items-center">
-                      এন্টারপ্রাইজ{" "}
-                      <Zap className="w-4 h-4 text-amber-400 ml-2" />
-                    </h3>
-                    <div className="text-3xl font-extrabold mb-6">কাস্টম</div>
-                    <ul className="space-y-3 mb-8 text-sm text-slate-300">
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-amber-400 mr-2" />{" "}
-                        আনলিমিটেড শিক্ষার্থী
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-amber-400 mr-2" />{" "}
-                        মাল্টি-ব্রাঞ্চ সাপোর্ট
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-amber-400 mr-2" />{" "}
-                        ডেডিকেটেড একাউন্ট ম্যানেজার
-                      </li>
-                      <li className="flex items-center">
-                        <CheckCircle2 className="w-4 h-4 text-amber-400 mr-2" />{" "}
-                        কাস্টম ডোমেইন (White-label)
-                      </li>
-                    </ul>
-                    <button className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-900 font-bold rounded-xl shadow-lg shadow-orange-500/20 transition-all">
-                      যোগাযোগ করুন
-                    </button>
-                  </div>
+                    return (
+                      <div
+                        key={plan._id || plan.id}
+                        className={`rounded-3xl p-8 transition-all flex flex-col relative ${
+                          isCurrent
+                            ? "bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-xl"
+                            : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
+                        }`}
+                      >
+                        {isCurrent && (
+                          <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-xl">
+                            বর্তমান প্ল্যান
+                          </div>
+                        )}
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                          {plan.name}
+                        </h3>
+                        <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 mb-6">
+                          ৳ {finalPrice.toLocaleString("en-IN")}{" "}
+                          <span className="text-sm font-medium text-slate-500">
+                            /{plan.billingType || "মাসিক"}
+                          </span>
+                        </div>
+                        <ul className="space-y-3 mb-8 text-sm text-slate-600 dark:text-slate-300 flex-1">
+                          {plan.features?.map((f, idx) => (
+                            <li key={idx} className="flex items-center">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 mr-2 shrink-0" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                        <button
+                          disabled={isCurrent}
+                          onClick={() => handleUpgradePlan(plan._id || plan.id!)}
+                          className={`w-full py-3 font-bold rounded-xl transition-all ${
+                            isCurrent
+                              ? "bg-emerald-600 text-white cursor-default"
+                              : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30 active:scale-95"
+                          }`}
+                        >
+                          {isCurrent ? "সক্রিয় রয়েছে" : "আপগ্রেড করুন"}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -859,13 +1064,7 @@ export default function SubscriberDashboard() {
                     আপনার ইমেইল এড্রেসটি দিন, আমরা একটি OTP কোড পাঠাবো।
                   </p>
                 </div>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    simulateApiCall(2);
-                  }}
-                  className="space-y-4"
-                >
+                <form onSubmit={handleSendOtp} className="space-y-4">
                   <div>
                     <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block">
                       আপনার ইমেইল
@@ -908,16 +1107,10 @@ export default function SubscriberDashboard() {
                     OTP যাচাই করুন
                   </h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    আমরা {resetEmail}-এ একটি কোড পাঠিয়েছি।
+                    আমরা {resetEmail}-এ একটি কোড পাঠিয়েছি (ডেমো: 1234)।
                   </p>
                 </div>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    simulateApiCall(3);
-                  }}
-                  className="space-y-6"
-                >
+                <form onSubmit={handleVerifyOtp} className="space-y-6">
                   <div className="flex justify-center gap-3">
                     {resetOtp.map((digit, index) => (
                       <input
@@ -957,17 +1150,8 @@ export default function SubscriberDashboard() {
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
                     নতুন পাসওয়ার্ড সেট করুন
                   </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    আপনার সিস্টেমের জন্য একটি নতুন পাসওয়ার্ড দিন।
-                  </p>
                 </div>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    simulateApiCall(4);
-                  }}
-                  className="space-y-4"
-                >
+                <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
                   <div>
                     <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block">
                       নতুন পাসওয়ার্ড
@@ -985,7 +1169,7 @@ export default function SubscriberDashboard() {
                       <button
                         type="button"
                         onClick={() => setShowResetPassword(!showResetPassword)}
-                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        className="absolute right-3 top-3 text-slate-400"
                       >
                         {showResetPassword ? (
                           <EyeOff className="w-5 h-5" />
@@ -1012,21 +1196,11 @@ export default function SubscriberDashboard() {
                         placeholder="••••••••"
                       />
                     </div>
-                    {resetConfirmPassword &&
-                      resetNewPassword !== resetConfirmPassword && (
-                        <p className="text-xs text-red-500 mt-1 font-medium">
-                          পাসওয়ার্ড মিলছে না!
-                        </p>
-                      )}
                   </div>
                   <button
                     type="submit"
-                    disabled={
-                      isResetLoading ||
-                      !resetNewPassword ||
-                      resetNewPassword !== resetConfirmPassword
-                    }
-                    className="w-full mt-2 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex justify-center items-center transition-all disabled:opacity-70"
+                    disabled={isResetLoading}
+                    className="w-full mt-2 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex justify-center items-center transition-all"
                   >
                     {isResetLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -1048,8 +1222,7 @@ export default function SubscriberDashboard() {
                   সফলভাবে পরিবর্তিত হয়েছে!
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                  আপনার এডুকেশন সিস্টেমের পাসওয়ার্ডটি পরিবর্তন করা হয়েছে। নতুন
-                  পাসওয়ার্ড দিয়ে এখন সিস্টেমে প্রবেশ করতে পারবেন।
+                  আপনার এডুকেশন সিস্টেমের পাসওয়ার্ডটি সফলভাবে পরিবর্তন করা হয়েছে।
                 </p>
                 <button
                   onClick={closeResetModal}

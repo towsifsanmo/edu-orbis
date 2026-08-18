@@ -1,6 +1,10 @@
 import { dbConnect } from "@/lib/db";
 import { errorResponse, successResponse } from "@/lib/response";
+import Billing from "@/models/Billing";
+import Lead from "@/models/Lead";
 import Pricing from "@/models/Pricing";
+import Setting from "@/models/Setting";
+import Testimonial from "@/models/Testimonial";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
 
@@ -122,14 +126,13 @@ async function handleSeed() {
       },
     ];
 
-    const seededUsers = [];
+    const userDocs: Record<string, any> = {};
 
     for (const userData of defaultUsers) {
       let user = await User.findOne({ email: userData.email });
       if (!user) {
         user = await User.create(userData);
       } else {
-        // Ensure role, status, package, and password match standard seed credentials
         user.name = userData.name;
         user.mobile = userData.mobile;
         user.instituteName = userData.instituteName;
@@ -140,18 +143,136 @@ async function handleSeed() {
         user.password = hashedPassword;
         await user.save();
       }
-      seededUsers.push({
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: user.status,
+      userDocs[userData.email] = user;
+    }
+
+    // 4. Seed Billings / Invoices
+    const defaultBillings = [
+      {
+        invoiceNo: "INV-2026-001",
+        userId: userDocs["sarmin@school.com"]?._id,
+        userName: "Sarmin Akter",
+        userEmail: "sarmin@school.com",
+        packageId: planDocs["স্টার্টার (Starter)"]._id,
+        packageName: "স্টার্টার (Starter)",
+        amount: 1020,
+        billingMethod: "বিকাশ (bKash)",
+        status: "Paid" as const,
+        date: new Date("2026-08-01"),
+      },
+      {
+        invoiceNo: "INV-2026-002",
+        userId: userDocs["user@edusaas.com"]?._id,
+        userName: "Karim Rahman",
+        userEmail: "user@edusaas.com",
+        packageId: planDocs["প্রফেশনাল (Professional)"]._id,
+        packageName: "প্রফেশনাল (Professional)",
+        amount: 1800,
+        billingMethod: "SSLCommerz",
+        status: "Paid" as const,
+        date: new Date("2026-08-05"),
+      },
+      {
+        invoiceNo: "INV-2026-003",
+        userId: userDocs["user@edusaas.com"]?._id,
+        userName: "Karim Rahman",
+        userEmail: "user@edusaas.com",
+        packageId: planDocs["প্রফেশনাল (Professional)"]._id,
+        packageName: "প্রফেশনাল (Professional)",
+        amount: 1800,
+        billingMethod: "SSLCommerz (Card)",
+        status: "Paid" as const,
+        date: new Date("2026-07-05"),
+      },
+      {
+        invoiceNo: "INV-2026-004",
+        userId: userDocs["jamal@college.com"]?._id,
+        userName: "Jamal Uddin",
+        userEmail: "jamal@college.com",
+        packageId: planDocs["এন্টারপ্রাইজ (Enterprise)"]._id,
+        packageName: "এন্টারপ্রাইজ (Enterprise)",
+        amount: 4500,
+        billingMethod: "ব্যাংক ট্রান্সফার",
+        status: "Pending" as const,
+        date: new Date("2026-08-10"),
+      },
+    ];
+
+    for (const b of defaultBillings) {
+      const exists = await Billing.findOne({ invoiceNo: b.invoiceNo });
+      if (!exists) {
+        await Billing.create(b);
+      }
+    }
+
+    // 5. Seed Leads
+    const defaultLeads = [
+      {
+        name: "Rafiqul Islam",
+        email: "rafiq@gmail.com",
+        phone: "01711000000",
+        message: "I need a full live demo for our 1500 students school.",
+        status: "New" as const,
+        date: new Date("2026-08-12"),
+      },
+      {
+        name: "Nusrat Jahan",
+        email: "nusrat@yahoo.com",
+        phone: "01811000000",
+        message: "Can we integrate existing biometric attendance machines?",
+        status: "Contacted" as const,
+        date: new Date("2026-08-13"),
+      },
+    ];
+
+    for (const l of defaultLeads) {
+      const exists = await Lead.findOne({ email: l.email });
+      if (!exists) {
+        await Lead.create(l);
+      }
+    }
+
+    // 6. Seed Testimonials
+    const defaultTestimonials = [
+      {
+        author: "ড. শফিকুল ইসলাম",
+        role: "অধ্যক্ষ",
+        instituteName: "ফিউচার প্রিপারেটরি স্কুল",
+        quote: "এডুস্যাস প্রো আমাদের স্কুলের ব্যবস্থাপনা ও একাউন্টিং অনেক সহজ ও স্বচ্ছ করে দিয়েছে।",
+        image: "https://i.pravatar.cc/150?u=14",
+        rating: 5,
+      },
+      {
+        author: "তাসনিম জাহান",
+        role: "প্রধান শিক্ষক",
+        instituteName: "আইডিয়াল একাডেমি",
+        quote: "রেজাল্ট পাবলিকেশন এবং এসএমএস নোটিফিকেশন সিস্টেম সত্যিই অতুলনীয়।",
+        image: "https://i.pravatar.cc/150?u=22",
+        rating: 5,
+      },
+    ];
+
+    for (const t of defaultTestimonials) {
+      const exists = await Testimonial.findOne({ author: t.author });
+      if (!exists) {
+        await Testimonial.create(t);
+      }
+    }
+
+    // 7. Seed Settings
+    let setting = await Setting.findOne();
+    if (!setting) {
+      await Setting.create({
+        siteName: "এডুস্যাস প্রো - স্কুল ম্যানেজমেন্ট",
+        adminEmail: "admin@edusaas.com",
+        supportPhone: "+880 1711223344",
+        supportEmail: "support@edusaas.com",
       });
     }
 
-    return successResponse("ডাটাবেস সিডার সফলভাবে সম্পন্ন হয়েছে।", {
+    return successResponse("ডাটাবেস সিডার সম্পূর্ণ সফলভাবে সম্পন্ন হয়েছে।", {
       plans: Object.keys(planDocs),
-      users: seededUsers,
+      users: Object.keys(userDocs),
     });
   } catch (error: any) {
     console.error("❌ Database seeding error:", error);
