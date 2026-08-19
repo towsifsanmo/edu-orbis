@@ -15,7 +15,6 @@ export async function POST(req: Request) {
       mobile,
       instituteName,
       packageId,
-      role,
       status,
       image,
       password,
@@ -48,10 +47,6 @@ export async function POST(req: Request) {
       return errorResponse("পাসওয়ার্ড প্রদান করুন।");
     }
 
-    if (!image || !image.trim()) {
-      return errorResponse("ছবি প্রদান করুন।");
-    }
-
     if (password.length < 6) {
       return errorResponse("পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।");
     }
@@ -60,16 +55,9 @@ export async function POST(req: Request) {
       return errorResponse("পাসওয়ার্ড সর্বোচ্চ ২০ অক্ষরের হতে হবে।");
     }
 
-    if (role && !["admin", "user"].includes(role)) {
-      return errorResponse("সঠিক role প্রদান করুন।");
-    }
-
-    if (status && !["active", "inactive"].includes(status)) {
-      return errorResponse("সঠিক status প্রদান করুন।");
-    }
-
+    const cleanEmail = email.trim().toLowerCase();
     const existingEmail = await User.findOne({
-      email: email,
+      email: cleanEmail,
     });
 
     if (existingEmail) {
@@ -80,7 +68,6 @@ export async function POST(req: Request) {
     }
 
     const selectedPackage = await Pricing.findById(packageId);
-
     if (!selectedPackage) {
       return errorResponse("নির্বাচিত প্যাকেজটি পাওয়া যায়নি।", 404);
     }
@@ -88,15 +75,15 @@ export async function POST(req: Request) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      name,
-      email,
-      mobile,
-      instituteName,
+      name: name.trim(),
+      email: cleanEmail,
+      mobile: mobile.trim(),
+      instituteName: instituteName.trim(),
       packageId,
       password: hashedPassword,
-      image,
-      role: role || "user",
-      status: status || "active",
+      image: image?.trim() || `https://i.pravatar.cc/150?u=${encodeURIComponent(cleanEmail)}`,
+      role: "user", // STRICT: Only user role allowed
+      status: status === "inactive" ? "inactive" : "active",
     });
 
     return successResponse(
@@ -116,7 +103,6 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error("❌ ব্যবহারকারী তৈরি করতে সমস্যা হয়েছে:", error);
-
     return errorResponse("ব্যবহারকারী তৈরি করতে একটি সমস্যা হয়েছে।", 500);
   }
 }

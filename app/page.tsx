@@ -56,6 +56,7 @@ import {
   HelpCircle,
   MapPin,
   Send,
+  Loader2,
 } from "lucide-react";
 
 type Theme = "light" | "dark";
@@ -931,29 +932,25 @@ const PaymentGateways = () => {
 };
 
 const Testimonials = () => {
-  const reviews = [
-    {
-      quote:
-        "এডুস্যাস প্রো ব্যবহার করা আমাদের স্কুলের জন্য সেরা সিদ্ধান্ত ছিল। স্বয়ংক্রিয় রিমাইন্ডার এবং অনলাইন পেমেন্ট ইন্টিগ্রেশনের কারণে আমাদের ফি আদায়ের হার ৪০% বৃদ্ধি পেয়েছে।",
-      author: "সারমিন আক্তার",
-      role: "অধ্যক্ষ, গ্রিনফিল্ড মডেল একাডেমি",
-      avatar: "https://i.pravatar.cc/150?img=47",
-    },
-    {
-      quote:
-        "এর ইউজার ইন্টারফেস এতই সহজ যে আমাদের শিক্ষকদের কোনো বাড়তি ট্রেনিংয়ের প্রয়োজন হয়নি। উপস্থিতি, গ্রেড এবং অভিভাবকদের সাথে যোগাযোগ এখন একটি মাত্র অ্যাপেই করা যাচ্ছে।",
-      author: "আহমেদ জুবায়ের",
-      role: "আইটি ইনচার্জ, ঢাকা পাবলিক স্কুল",
-      avatar: "https://i.pravatar.cc/150?img=11",
-    },
-    {
-      quote:
-        "আগে আমরা তিনটি ভিন্ন সফটওয়্যার ব্যবহার করতাম, যা এখন শুধু এডুস্যাস দিয়েই সম্ভব হচ্ছে। সিস্টেমটি অনেক দ্রুত এবং তাদের কাস্টমার সাপোর্ট টিম দুর্দান্তভাবে আমাদের ডেটা মাইগ্রেট করে দিয়েছে।",
-      author: "ড. শফিকুল ইসলাম",
-      role: "পরিচালক, ফিউচার প্রিপারেটরি",
-      avatar: "https://i.pravatar.cc/150?img=14",
-    },
-  ];
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadTestimonials() {
+      try {
+        const res = await fetch("/api/public/testimonials");
+        const data = await res.json();
+        if (res.ok && data.success && Array.isArray(data.data)) {
+          setReviews(data.data);
+        }
+      } catch (err) {
+        console.error("Testimonials fetch error:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadTestimonials();
+  }, []);
 
   return (
     <section
@@ -971,113 +968,76 @@ const Testimonials = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {reviews.map((review, i) => (
-            <div
-              key={i}
-              className="bg-white dark:bg-slate-800/80 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 relative flex flex-col shadow-sm hover:shadow-md transition-shadow"
-            >
-              <div className="flex text-amber-400 mb-6">
-                {[...Array(5)].map((_, idx) => (
-                  <Star key={idx} className="w-5 h-5 fill-current" />
-                ))}
-              </div>
-              <p className="text-slate-700 dark:text-slate-300 mb-8 italic flex-1 leading-relaxed">
-                "{review.quote}"
-              </p>
-              <div className="flex items-center mt-auto">
-                <img
-                  src={review.avatar}
-                  alt={review.author}
-                  className="w-12 h-12 rounded-full border-2 border-slate-100 dark:border-slate-600 shadow-sm"
-                />
-                <div className="ml-4">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    {review.author}
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {review.role}
-                  </p>
+        {isLoading ? (
+          <div className="flex justify-center items-center py-16">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          </div>
+        ) : reviews.length === 0 ? (
+          <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+            বর্তমানে কোনো টেস্টিমোনিয়াল উপলব্ধ নেই।
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {reviews.map((review, i) => (
+              <div
+                key={review._id || i}
+                className="bg-white dark:bg-slate-800/80 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 relative flex flex-col shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="flex text-amber-400 mb-6">
+                  {[...Array(review.rating || 5)].map((_, idx) => (
+                    <Star key={idx} className="w-5 h-5 fill-current" />
+                  ))}
+                </div>
+                <p className="text-slate-700 dark:text-slate-300 mb-8 italic flex-1 leading-relaxed">
+                  &ldquo;{review.quote}&rdquo;
+                </p>
+                <div className="flex items-center mt-auto">
+                  <img
+                    src={review.image || `https://i.pravatar.cc/150?u=${i}`}
+                    alt={review.author}
+                    className="w-12 h-12 rounded-full border-2 border-slate-100 dark:border-slate-600 shadow-sm object-cover"
+                  />
+                  <div className="ml-4">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                      {review.author}
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {review.role}
+                      {review.instituteName ? `, ${review.instituteName}` : ""}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
 };
 
+
 const Pricing = () => {
+  const [plans, setPlans] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAnnual, setIsAnnual] = useState(true);
 
-  const plans = [
-    {
-      name: "স্টার্টার",
-      target: "ছোট স্কুল ও মাদ্রাসার জন্য",
-      priceMonthly: "১,৫০০",
-      priceAnnual: "১,২০০",
-      description: "বেসিক ম্যানেজমেন্ট ও ডিজিটাল উপস্থিতির জন্য পারফেক্ট।",
-      features: [
-        "সর্বোচ্চ ৫০০ শিক্ষার্থী",
-        "বেসিক অ্যাটেনডেন্স",
-        "রেজাল্ট প্রসেসিং (ম্যানুয়াল)",
-        "ইমেইল সাপোর্ট",
-        "স্ট্যান্ডার্ড রিপোর্টিং",
-      ],
-      notIncluded: [
-        "অনলাইন পেমেন্ট গেটওয়ে",
-        "বাল্ক এসএমএস",
-        "অটোমেটেড একাউন্টিং",
-      ],
-      popular: false,
-      buttonText: "ফ্রি ট্রায়াল শুরু করুন",
-      buttonClass:
-        "bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 dark:border dark:border-slate-600",
-    },
-    {
-      name: "প্রফেশনাল",
-      target: "মাঝারি ও বড় স্কুলের জন্য",
-      priceMonthly: "৩,০০০",
-      priceAnnual: "২,৪০০",
-      description:
-        "সবচেয়ে জনপ্রিয় প্ল্যান। আপনার প্রতিষ্ঠানের সম্পূর্ণ ডিজিটালাইজেশন।",
-      features: [
-        "সর্বোচ্চ ২,০০০ শিক্ষার্থী",
-        "বায়োমেট্রিক অ্যাটেনডেন্স",
-        "অনলাইন পেমেন্ট গেটওয়ে",
-        "অটোমেটেড একাউন্টিং ও পেরোল",
-        "বাল্ক এসএমএস ইন্টিগ্রেশন",
-        "ফুল রেজাল্ট পাবলিশিং সিস্টেম",
-        "প্যারেন্টস মোবাইল অ্যাপ",
-      ],
-      notIncluded: [],
-      popular: true,
-      buttonText: "প্রো প্ল্যান কিনুন",
-      buttonClass:
-        "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/30",
-    },
-    {
-      name: "এন্টারপ্রাইজ",
-      target: "গ্রুপ অব স্কুল বা বিশ্ববিদ্যালয়ের জন্য",
-      priceMonthly: "কাস্টম",
-      priceAnnual: "কাস্টম",
-      description: "একাধিক ব্রাঞ্চ এবং কাস্টমাইজড ফিচারের জন্য বিশেষ প্ল্যান।",
-      features: [
-        "আনলিমিটেড শিক্ষার্থী",
-        "মাল্টি-ব্রাঞ্চ ম্যানেজমেন্ট",
-        "কাস্টম ডোমেইন ও হোয়াইট লেবেল",
-        "ডেডিকেটেড একাউন্ট ম্যানেজার",
-        "কাস্টম এপিআই (API) ইন্টিগ্রেশন",
-        "২৪/৭ প্রায়োরিটি সাপোর্ট",
-      ],
-      notIncluded: [],
-      popular: false,
-      buttonText: "যোগাযোগ করুন",
-      buttonClass:
-        "bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100",
-    },
-  ];
+  useEffect(() => {
+    async function loadPricing() {
+      try {
+        const res = await fetch("/api/public/pricing");
+        const data = await res.json();
+        if (res.ok && data.success && Array.isArray(data.data)) {
+          setPlans(data.data);
+        }
+      } catch (err) {
+        console.error("Pricing fetch error:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadPricing();
+  }, []);
 
   return (
     <section id="pricing" className="py-24 bg-white dark:bg-slate-900 relative">
@@ -1109,95 +1069,151 @@ const Pricing = () => {
             >
               বার্ষিক বিলিং
               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                ২০% ছাড়
+                ডিসকাউন্ট অফার
               </span>
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {plans.map((plan, i) => (
-            <div
-              key={i}
-              className={`relative flex flex-col bg-white dark:bg-slate-800 rounded-3xl p-8 border ${plan.popular ? "border-blue-500 dark:border-blue-500 shadow-xl shadow-blue-500/10 scale-105 z-10" : "border-slate-200 dark:border-slate-700 shadow-sm"} transition-all duration-300`}
-            >
-              {plan.popular && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide shadow-md">
-                    সবচেয়ে জনপ্রিয়
-                  </span>
-                </div>
-              )}
+        {isLoading ? (
+          <div className="flex justify-center items-center py-16">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          </div>
+        ) : plans.length === 0 ? (
+          <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+            বর্তমানে কোনো প্রাইসিং প্ল্যান উপলব্ধ নেই।
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {plans.map((plan, i) => {
+              const basePrice = plan.price || 0;
+              const hasDiscount = plan.discount && plan.discount > 0;
+              const discountedPrice = hasDiscount
+                ? Math.round(basePrice - (basePrice * plan.discount) / 100)
+                : plan.discountPrice || basePrice;
 
-              <div className="mb-6">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
-                  {plan.name}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 h-5">
-                  {plan.target}
-                </p>
-              </div>
+              const displayPrice = isAnnual ? discountedPrice : basePrice;
+              const isPopular = i === 1;
 
-              <div className="mb-6 flex items-baseline text-slate-900 dark:text-white">
-                {plan.priceMonthly !== "কাস্টম" && (
-                  <span className="text-3xl font-extrabold mr-1">৳</span>
-                )}
-                <span className="text-5xl font-extrabold tracking-tight">
-                  {isAnnual ? plan.priceAnnual : plan.priceMonthly}
-                </span>
-                {plan.priceMonthly !== "কাস্টম" && (
-                  <span className="text-slate-500 dark:text-slate-400 ml-1 font-medium">
-                    / মাস
-                  </span>
-                )}
-              </div>
+              return (
+                <div
+                  key={plan._id || i}
+                  className={`relative flex flex-col bg-white dark:bg-slate-800 rounded-3xl p-8 border ${
+                    isPopular
+                      ? "border-blue-500 dark:border-blue-500 shadow-xl shadow-blue-500/10 scale-105 z-10"
+                      : "border-slate-200 dark:border-slate-700 shadow-sm"
+                  } transition-all duration-300`}
+                >
+                  {isPopular && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                      <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide shadow-md">
+                        সবচেয়ে জনপ্রিয়
+                      </span>
+                    </div>
+                  )}
 
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700 h-16">
-                {plan.description}
-              </p>
+                  <div className="mb-6">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                      {plan.name}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {plan.billingType || "রেগুলার প্ল্যান"}
+                    </p>
+                  </div>
 
-              <ul className="space-y-4 mb-8 flex-1">
-                {plan.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start">
-                    <CheckCircle2 className="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 dark:text-slate-300">
-                      {feature}
+                  <div className="mb-6 flex items-baseline text-slate-900 dark:text-white">
+                    <span className="text-3xl font-extrabold mr-1">৳</span>
+                    <span className="text-5xl font-extrabold tracking-tight">
+                      {displayPrice.toLocaleString("en-IN")}
                     </span>
-                  </li>
-                ))}
-                {plan.notIncluded.map((feature, idx) => (
-                  <li
-                    key={`not-${idx}`}
-                    className="flex items-start opacity-50"
+                    <span className="text-slate-500 dark:text-slate-400 ml-1 font-medium text-sm">
+                      /{isAnnual ? "মাস (বার্ষিক বিলিং)" : "মাস"}
+                    </span>
+                  </div>
+
+                  {hasDiscount && isAnnual && (
+                    <div className="mb-4">
+                      <span className="text-xs bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 font-bold px-2 py-0.5 rounded-full">
+                        {plan.discount}% ডিসকাউন্ট প্রযোজ্য
+                      </span>
+                    </div>
+                  )}
+
+                  <ul className="space-y-4 mb-8 flex-1">
+                    {plan.features?.map((feature: string, idx: number) => (
+                      <li key={idx} className="flex items-start">
+                        <CheckCircle2 className="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                          {feature}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/login"
+                    className={`w-full py-3.5 px-4 rounded-xl font-semibold text-center transition-all active:scale-95 ${
+                      isPopular
+                        ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/30"
+                        : "bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600"
+                    }`}
                   >
-                    <X className="w-5 h-5 text-slate-400 mr-3 flex-shrink-0" />
-                    <span className="text-sm text-slate-500 line-through">
-                      {feature}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                className={`w-full py-3.5 px-4 rounded-xl font-semibold text-center transition-all active:scale-95 ${plan.buttonClass}`}
-              >
-                {plan.buttonText}
-              </button>
-            </div>
-          ))}
-        </div>
+                    প্ল্যানটি বেছে নিন
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
 };
 
 const Support = () => {
+  const [formData, setFormData] = useState({
+    name: "",
+    instituteName: "",
+    phone: "",
+    email: "",
+    message: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setToastMsg(null);
+    try {
+      const res = await fetch("/api/public/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToastMsg({
+          text: "আপনার বার্তাটি সফলভাবে পাঠানো হয়েছে! আমাদের টিম দ্রুত যোগাযোগ করবে।",
+          type: "success",
+        });
+        setFormData({ name: "", instituteName: "", phone: "", email: "", message: "" });
+      } else {
+        setToastMsg({ text: data.message || "বার্তা পাঠাতে ব্যর্থ হয়েছে।", type: "error" });
+      }
+    } catch (err) {
+      setToastMsg({ text: "সার্ভারে সমস্যা হয়েছে। পরে চেষ্টা করুন।", type: "error" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const supportChannels = [
     {
       title: "ফোন সাপোর্ট",
       desc: "সরাসরি আমাদের এক্সিকিউটিভদের সাথে কথা বলুন। (সকাল ৯টা - রাত ৮টা)",
       icon: PhoneCall,
-      action: "+880 1234 567890",
+      action: "+880 1711 223344",
       color: "text-emerald-500",
       bg: "bg-emerald-50 dark:bg-emerald-500/10",
     },
@@ -1246,12 +1262,9 @@ const Support = () => {
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 h-10">
                     {channel.desc}
                   </p>
-                  <a
-                    href="#"
-                    className={`text-sm font-semibold ${channel.color} hover:underline`}
-                  >
+                  <span className={`text-sm font-semibold ${channel.color}`}>
                     {channel.action}
-                  </a>
+                  </span>
                 </div>
               ))}
             </div>
@@ -1262,18 +1275,33 @@ const Support = () => {
             <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
               আমাদের বার্তা পাঠান
             </h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-8">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
               ডেমো রিকোয়েস্ট বা যেকোনো জিজ্ঞাসার জন্য ফর্মটি পূরণ করুন।
             </p>
 
-            <form className="space-y-5">
+            {toastMsg && (
+              <div
+                className={`mb-6 p-4 rounded-xl text-sm font-medium ${
+                  toastMsg.type === "success"
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                    : "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800"
+                }`}
+              >
+                {toastMsg.text}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    আপনার নাম
+                    আপনার নাম *
                   </label>
                   <input
                     type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                     placeholder="উদাঃ মোঃ আব্দুল্লাহ"
                   />
@@ -1284,6 +1312,8 @@ const Support = () => {
                   </label>
                   <input
                     type="text"
+                    value={formData.instituteName}
+                    onChange={(e) => setFormData({ ...formData, instituteName: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                     placeholder="উদাঃ ঢাকা পাবলিক স্কুল"
                   />
@@ -1293,20 +1323,26 @@ const Support = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    মোবাইল নম্বর
+                    মোবাইল নম্বর *
                   </label>
                   <input
                     type="tel"
+                    required
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                     placeholder="01XXX-XXXXXX"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                    ইমেইল এড্রেস
+                    ইমেইল এড্রেস *
                   </label>
                   <input
                     type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                     placeholder="example@email.com"
                   />
@@ -1315,20 +1351,28 @@ const Support = () => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                  আপনার বার্তা
+                  আপনার বার্তা / ডেমো রিকোয়েস্ট *
                 </label>
                 <textarea
                   rows={4}
+                  required
+                  value={formData.message}
+                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none"
                   placeholder="কিভাবে আমরা আপনাকে সাহায্য করতে পারি?"
                 ></textarea>
               </div>
 
               <button
-                type="button"
-                className="w-full py-4 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center justify-center"
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-4 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center justify-center disabled:opacity-70"
               >
-                <Send className="w-5 h-5 mr-2" />
+                {isSubmitting ? (
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5 mr-2" />
+                )}
                 বার্তা পাঠান
               </button>
             </form>

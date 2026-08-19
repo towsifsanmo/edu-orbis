@@ -1593,12 +1593,13 @@ export default function AdminDashboardPage() {
                         </label>
                         <select
                           name="userRole"
-                          defaultValue={selectedItem?.role || "user"}
-                          className="w-full p-2.5 rounded-lg border dark:bg-slate-800 dark:text-white"
+                          defaultValue="user"
+                          disabled
+                          className="w-full p-2.5 rounded-lg border dark:bg-slate-800 dark:text-slate-300 bg-slate-100 cursor-not-allowed"
                         >
                           <option value="user">Subscriber (User)</option>
-                          <option value="admin">Admin</option>
                         </select>
+                        <input type="hidden" name="userRole" value="user" />
                       </div>
                       <div>
                         <label className="text-sm font-medium dark:text-slate-300 block mb-1">

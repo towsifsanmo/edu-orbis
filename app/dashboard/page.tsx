@@ -85,31 +85,13 @@ export default function SubscriberDashboard() {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // User State
-  const [user, setUser] = useState<UserProfile>({
-    name: "ব্যবহারকারী",
-    schoolName: "ঢাকা পাবলিক স্কুল এন্ড কলেজ",
-    email: "user@edusaas.com",
-    phone: "+880 1711-223344",
-    role: "User / Subscriber",
-    avatar: "https://i.pravatar.cc/150?u=1",
-    joinDate: "১৫ আগস্ট, ২০২৬",
-  });
+  // User State (Zero mock defaults)
+  const [user, setUser] = useState<UserProfile | null>(null);
 
   // Active Plan State
-  const [activePlan, setActivePlan] = useState<ActivePlan>({
-    name: "প্রফেশনাল প্ল্যান",
-    status: "Active",
-    price: "২,৪০০",
-    billingCycle: "মাসিক",
-    nextBillingDate: "১৫ সেপ্টেম্বর, ২০২৬",
-    featuresUsed: {
-      students: { current: 1850, limit: 2000 },
-      sms: { current: 4500, limit: 5000 },
-    },
-  });
+  const [activePlan, setActivePlan] = useState<ActivePlan | null>(null);
 
   // Billing State
   const [paymentHistory, setPaymentHistory] = useState<PaymentItem[]>([]);
@@ -162,53 +144,54 @@ export default function SubscriberDashboard() {
 
   // Fetch Dashboard Overview
   const fetchOverview = useCallback(async () => {
-    setIsLoading(true);
     try {
       const res = await fetch("/api/user/overview");
       const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (res.ok && data.success && data.data) {
         const u = data.data.user;
         const p = data.data.activePlan;
 
-        setUser({
-          id: u.id,
-          name: u.name || "ইউজার",
-          schoolName: u.instituteName || "স্কুল / কলেজ",
-          email: u.email,
-          phone: u.mobile || "+880 1700000000",
-          role: u.role === "admin" ? "Admin" : "Principal / Subscriber",
-          avatar: u.image || "https://i.pravatar.cc/150?u=1",
-          joinDate: u.createdAt
-            ? new Date(u.createdAt).toLocaleDateString("bn-BD")
-            : "১৫ আগস্ট, ২০২৬",
-        });
+        if (u) {
+          setUser({
+            id: u.id || u._id,
+            name: u.name || "ইউজার",
+            schoolName: u.instituteName || "স্কুল / কলেজ",
+            email: u.email,
+            phone: u.mobile || "নম্বর প্রদান করা হয়নি",
+            role: "Subscriber",
+            avatar: u.image || `https://i.pravatar.cc/150?u=${u.email}`,
+            joinDate: u.createdAt
+              ? new Date(u.createdAt).toLocaleDateString("bn-BD")
+              : "",
+          });
 
-        setProfileForm({
-          name: u.name || "",
-          instituteName: u.instituteName || "",
-          mobile: u.mobile || "",
-        });
+          setProfileForm({
+            name: u.name || "",
+            instituteName: u.instituteName || "",
+            mobile: u.mobile || "",
+          });
+        }
 
         if (p) {
           setActivePlan({
-            id: p.id,
-            name: p.name || "প্রফেশনাল প্ল্যান",
+            id: p.id || p._id,
+            name: p.name || "প্ল্যান",
             status: p.status || "Active",
-            price: p.price ? p.price.toLocaleString("en-IN") : "২,৪০০",
+            price: p.price ? p.price.toLocaleString("en-IN") : "০",
             billingCycle: p.billingCycle || "মাসিক",
-            nextBillingDate: "১৫ সেপ্টেম্বর, ২০২৬",
+            nextBillingDate: p.nextBillingDate || "১৫ সেপ্টেম্বর, ২০২৬",
             featuresUsed: p.usage || {
-              students: { current: 1850, limit: 2000 },
-              sms: { current: 4500, limit: 5000 },
+              students: { current: 0, limit: 1000 },
+              sms: { current: 0, limit: 1000 },
             },
           });
+        } else {
+          setActivePlan(null);
         }
       }
     } catch (e) {
       console.error("Overview fetch error:", e);
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
@@ -218,7 +201,7 @@ export default function SubscriberDashboard() {
       const res = await fetch("/api/user/billing");
       const data = await res.json();
       if (res.ok && data.success) {
-        setPaymentHistory(data.data || []);
+        setPaymentHistory(Array.isArray(data.data) ? data.data : []);
       }
     } catch (e) {
       console.error("Billing fetch error:", e);
@@ -231,7 +214,7 @@ export default function SubscriberDashboard() {
       const res = await fetch("/api/user/plans");
       const data = await res.json();
       if (res.ok && data.success) {
-        setAvailablePlans(data.data || []);
+        setAvailablePlans(Array.isArray(data.data) ? data.data : []);
       }
     } catch (e) {
       console.error("Plans fetch error:", e);
@@ -240,9 +223,12 @@ export default function SubscriberDashboard() {
 
   useEffect(() => {
     setMounted(true);
-    fetchOverview();
-    fetchBilling();
-    fetchPlans();
+    async function initDashboard() {
+      setIsLoading(true);
+      await Promise.all([fetchOverview(), fetchBilling(), fetchPlans()]);
+      setIsLoading(false);
+    }
+    initDashboard();
   }, [fetchOverview, fetchBilling, fetchPlans]);
 
   // Update Profile Submit
@@ -446,8 +432,13 @@ export default function SubscriberDashboard() {
     router.refresh();
   };
 
-  if (!mounted)
-    return <div className="min-h-screen bg-slate-50 dark:bg-slate-950"></div>;
+  if (!mounted || (isLoading && !user)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
 
   const navItems = [
     { id: "overview", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
@@ -511,16 +502,16 @@ export default function SubscriberDashboard() {
         <div className="p-6 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center space-x-4">
             <img
-              src={user.avatar}
-              alt={user.name}
+              src={user?.avatar || "https://i.pravatar.cc/150?u=1"}
+              alt={user?.name || "Profile"}
               className="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-700 object-cover"
             />
             <div>
               <h3 className="font-semibold text-slate-900 dark:text-white truncate max-w-[150px]">
-                {user.name}
+                {user?.name || "ইউজার"}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
-                {user.schoolName}
+                {user?.schoolName || "প্রতিষ্ঠান"}
               </p>
             </div>
           </div>
@@ -576,7 +567,7 @@ export default function SubscriberDashboard() {
               onClick={() => setIsMobileMenuOpen(true)}
               className="mr-4 lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">
               {navItems.find((item) => item.id === activeTab)?.label}
@@ -607,98 +598,117 @@ export default function SubscriberDashboard() {
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 text-white shadow-xl shadow-blue-500/20 relative overflow-hidden">
                   <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
                   <h2 className="text-2xl font-bold mb-2">
-                    স্বাগতম, {user.name}! 👋
+                    স্বাগতম, {user?.name}! 👋
                   </h2>
                   <p className="text-blue-100 opacity-90 max-w-xl leading-relaxed">
-                    আপনার {user.schoolName} এর এডুস্যাস ম্যানেজমেন্ট সিস্টেম সক্রিয়
+                    আপনার {user?.schoolName} এর এডুস্যাস ম্যানেজমেন্ট সিস্টেম সক্রিয়
                     রয়েছে। নিচে বর্তমান সাবস্ক্রিপশন স্ট্যাটাস এবং ব্যবহার পরিসংখ্যান দেখুন।
                   </p>
                 </div>
 
                 {/* Active Plan Widget */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
-                    <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <div className="flex items-center space-x-2 mb-2">
-                          <ShieldCheck className="w-6 h-6 text-emerald-500" />
-                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                            বর্তমান প্যাকেজ
-                          </h3>
+                {activePlan ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
+                      <div className="flex justify-between items-start mb-6">
+                        <div>
+                          <div className="flex items-center space-x-2 mb-2">
+                            <ShieldCheck className="w-6 h-6 text-emerald-500" />
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                              বর্তমান প্যাকেজ
+                            </h3>
+                          </div>
+                          <p className="text-3xl font-extrabold text-slate-900 dark:text-white">
+                            {activePlan.name}
+                          </p>
                         </div>
-                        <p className="text-3xl font-extrabold text-slate-900 dark:text-white">
-                          {activePlan.name}
-                        </p>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+                          {activePlan.status}
+                        </span>
                       </div>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
-                        {activePlan.status}
-                      </span>
+
+                      <div className="grid grid-cols-2 gap-4 mb-8">
+                        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
+                            প্যাকেজ মূল্য
+                          </p>
+                          <p className="font-bold text-slate-900 dark:text-white">
+                            ৳ {activePlan.price}
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
+                            বিলিং সাইকেল
+                          </p>
+                          <p className="font-bold text-slate-900 dark:text-white">
+                            {activePlan.billingCycle}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between text-sm mb-1.5">
+                            <span className="text-slate-600 dark:text-slate-300 font-medium">
+                              শিক্ষার্থী লিমিট ব্যবহার
+                            </span>
+                            <span className="text-slate-900 dark:text-white font-bold">
+                              {activePlan.featuresUsed?.students?.current || 0} /{" "}
+                              {activePlan.featuresUsed?.students?.limit || 1000}
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className="bg-blue-500 h-2.5 rounded-full"
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  ((activePlan.featuresUsed?.students?.current || 0) /
+                                    (activePlan.featuresUsed?.students?.limit || 1000)) *
+                                    100
+                                )}%`,
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 mb-8">
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
-                          প্যাকেজ মূল্য
-                        </p>
-                        <p className="font-bold text-slate-900 dark:text-white">
-                          ৳ {activePlan.price}
-                        </p>
-                      </div>
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
-                          বিলিং সাইকেল
-                        </p>
-                        <p className="font-bold text-slate-900 dark:text-white">
-                          {activePlan.billingCycle}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm mb-1.5">
-                          <span className="text-slate-600 dark:text-slate-300 font-medium">
-                            শিক্ষার্থী লিমিট ব্যবহার
-                          </span>
-                          <span className="text-slate-900 dark:text-white font-bold">
-                            {activePlan.featuresUsed.students.current} /{" "}
-                            {activePlan.featuresUsed.students.limit}
-                          </span>
-                        </div>
-                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                          <div
-                            className="bg-blue-500 h-2.5 rounded-full"
-                            style={{
-                              width: `${
-                                (activePlan.featuresUsed.students.current /
-                                  activePlan.featuresUsed.students.limit) *
-                                100
-                              }%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
+                    {/* Quick Action */}
+                    <div className="bg-slate-900 dark:bg-slate-800 rounded-3xl p-6 md:p-8 text-white shadow-sm flex flex-col justify-center text-center">
+                      <Zap className="w-12 h-12 mx-auto text-amber-400 mb-4" />
+                      <h3 className="text-xl font-bold mb-2">
+                        প্যাকেজ পরিবর্তন করবেন?
+                      </h3>
+                      <p className="text-slate-400 text-sm mb-6">
+                        আরও বেশি শিক্ষার্থী ও প্রিমিয়াম ফিচার আনলক করতে উপযুক্ত প্ল্যানে আপগ্রেড করুন।
+                      </p>
+                      <button
+                        onClick={() => setActiveTab("pricing")}
+                        className="w-full py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-100 transition-colors"
+                      >
+                        প্যাকেজসমূহ দেখুন
+                      </button>
                     </div>
                   </div>
-
-                  {/* Quick Action */}
-                  <div className="bg-slate-900 dark:bg-slate-800 rounded-3xl p-6 md:p-8 text-white shadow-sm flex flex-col justify-center text-center">
-                    <Zap className="w-12 h-12 mx-auto text-amber-400 mb-4" />
-                    <h3 className="text-xl font-bold mb-2">
-                      প্যাকেজ আপগ্রেড করবেন?
+                ) : (
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center">
+                    <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                      কোনো অ্যাক্টিভ প্যাকেজ পাওয়া যায়নি
                     </h3>
-                    <p className="text-slate-400 text-sm mb-6">
-                      আরও বেশি শিক্ষার্থী ও প্রিমিয়াম ফিচার আনলক করতে এন্টারপ্রাইজ প্ল্যানে আপগ্রেড করুন।
+                    <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+                      আপনার অ্যাকাউন্টে বর্তমানে কোনো প্যাকেজ সক্রিয় নেই। অনুগ্রহ করে একটি প্যাকেজ নির্বাচন করুন।
                     </p>
                     <button
                       onClick={() => setActiveTab("pricing")}
-                      className="w-full py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-100 transition-colors"
+                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all"
                     >
-                      প্যাকেজ দেখুন
+                      প্যাকেজ নির্বাচন করুন
                     </button>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -715,12 +725,12 @@ export default function SubscriberDashboard() {
                     <form onSubmit={handleProfileUpdate} className="space-y-5">
                       <div className="flex items-center space-x-6 mb-6">
                         <img
-                          src={user.avatar}
+                          src={user?.avatar || "https://i.pravatar.cc/150?u=1"}
                           alt="Profile"
                           className="w-20 h-20 rounded-full border-4 border-slate-100 dark:border-slate-800 object-cover"
                         />
                         <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                          {user.email}
+                          {user?.email}
                         </p>
                       </div>
 
@@ -897,8 +907,8 @@ export default function SubscriberDashboard() {
                   </div>
 
                   {paymentHistory.length === 0 ? (
-                    <div className="p-12 text-center text-slate-500">
-                      কোনো পেমেন্ট হিস্ট্রি পাওয়া যায়নি।
+                    <div className="p-12 text-center text-slate-500 dark:text-slate-400">
+                      কোনো পেমেন্ট ও ইনভয়েস হিস্ট্রি পাওয়া যায়নি।
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -927,9 +937,9 @@ export default function SubscriberDashboard() {
                                 {payment.invoiceNo || payment.id}
                               </td>
                               <td className="py-4 px-6 text-slate-500 dark:text-slate-400">
-                                {new Date(payment.date).toLocaleDateString(
-                                  "bn-BD"
-                                )}
+                                {payment.date
+                                  ? new Date(payment.date).toLocaleDateString("bn-BD")
+                                  : "প্রযোজ্য নয়"}
                               </td>
                               <td className="py-4 px-6 font-bold text-blue-600 dark:text-blue-400">
                                 ৳ {payment.amount}
@@ -980,59 +990,65 @@ export default function SubscriberDashboard() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {availablePlans.map((plan) => {
-                    const isCurrent =
-                      activePlan.id === plan._id ||
-                      activePlan.name === plan.name;
-                    const finalPrice = plan.discountPrice || plan.price;
+                {availablePlans.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                    বর্তমানে কোনো প্যাকেজ উপলব্ধ নেই।
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {availablePlans.map((plan) => {
+                      const isCurrent =
+                        activePlan?.id === plan._id ||
+                        activePlan?.name === plan.name;
+                      const finalPrice = plan.discountPrice || plan.price;
 
-                    return (
-                      <div
-                        key={plan._id || plan.id}
-                        className={`rounded-3xl p-8 transition-all flex flex-col relative ${
-                          isCurrent
-                            ? "bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-xl"
-                            : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
-                        }`}
-                      >
-                        {isCurrent && (
-                          <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-xl">
-                            বর্তমান প্ল্যান
-                          </div>
-                        )}
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                          {plan.name}
-                        </h3>
-                        <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 mb-6">
-                          ৳ {finalPrice.toLocaleString("en-IN")}{" "}
-                          <span className="text-sm font-medium text-slate-500">
-                            /{plan.billingType || "মাসিক"}
-                          </span>
-                        </div>
-                        <ul className="space-y-3 mb-8 text-sm text-slate-600 dark:text-slate-300 flex-1">
-                          {plan.features?.map((f, idx) => (
-                            <li key={idx} className="flex items-center">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 mr-2 shrink-0" />
-                              {f}
-                            </li>
-                          ))}
-                        </ul>
-                        <button
-                          disabled={isCurrent}
-                          onClick={() => handleUpgradePlan(plan._id || plan.id!)}
-                          className={`w-full py-3 font-bold rounded-xl transition-all ${
+                      return (
+                        <div
+                          key={plan._id || plan.id}
+                          className={`rounded-3xl p-8 transition-all flex flex-col relative ${
                             isCurrent
-                              ? "bg-emerald-600 text-white cursor-default"
-                              : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30 active:scale-95"
+                              ? "bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-xl"
+                              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
                           }`}
                         >
-                          {isCurrent ? "সক্রিয় রয়েছে" : "আপগ্রেড করুন"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                          {isCurrent && (
+                            <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl rounded-tr-xl">
+                              বর্তমান প্ল্যান
+                            </div>
+                          )}
+                          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            {plan.name}
+                          </h3>
+                          <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 mb-6">
+                            ৳ {finalPrice.toLocaleString("en-IN")}{" "}
+                            <span className="text-sm font-medium text-slate-500">
+                              /{plan.billingType || "মাসিক"}
+                            </span>
+                          </div>
+                          <ul className="space-y-3 mb-8 text-sm text-slate-600 dark:text-slate-300 flex-1">
+                            {plan.features?.map((f, idx) => (
+                              <li key={idx} className="flex items-center">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500 mr-2 shrink-0" />
+                                {f}
+                              </li>
+                            ))}
+                          </ul>
+                          <button
+                            disabled={isCurrent}
+                            onClick={() => handleUpgradePlan(plan._id || plan.id!)}
+                            className={`w-full py-3 font-bold rounded-xl transition-all ${
+                              isCurrent
+                                ? "bg-emerald-600 text-white cursor-default"
+                                : "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30 active:scale-95"
+                            }`}
+                          >
+                            {isCurrent ? "সক্রিয় রয়েছে" : "আপগ্রেড করুন"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

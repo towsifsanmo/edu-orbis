@@ -41,11 +41,11 @@ export async function GET(req: Request) {
           recentUsers,
           recentBillings,
         ] = await Promise.all([
-          User.countDocuments({ role: "user" }),
-          User.countDocuments({ role: "user", status: "active" }),
+          User.countDocuments({ role: { $ne: "admin" } }),
+          User.countDocuments({ role: { $ne: "admin" }, status: "active" }),
           Lead.countDocuments({}),
           Billing.find({ status: "Paid" }).lean(),
-          User.find({ role: "user" })
+          User.find({ role: { $ne: "admin" } })
             .sort({ createdAt: -1 })
             .limit(5)
             .populate("packageId")
@@ -93,10 +93,10 @@ export async function GET(req: Request) {
       }
 
       // =========================
-      // Users
+      // Users (Exclude single admin)
       // =========================
       case "users": {
-        const users = await User.find({})
+        const users = await User.find({ role: { $ne: "admin" } })
           .sort({ createdAt: -1 })
           .populate("packageId")
           .lean();
@@ -108,7 +108,7 @@ export async function GET(req: Request) {
       // Subscribers
       // =========================
       case "subscribers": {
-        const subscribers = await User.find({ role: "user" })
+        const subscribers = await User.find({ role: { $ne: "admin" } })
           .sort({ createdAt: -1 })
           .populate("packageId")
           .lean();
