@@ -44,22 +44,37 @@ function base64UrlDecode(str: string): string {
   }
 }
 
-async function getCryptoKey(secret: string, usage: "sign" | "verify"): Promise<CryptoKey> {
+function getJWTSecret(): string {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error("JWT_SECRET environment variable is not configured");
+  }
+
+  return secret;
+}
+
+async function getCryptoKey(
+  secret: string,
+  usage: "sign" | "verify",
+): Promise<CryptoKey> {
   const enc = new TextEncoder();
+
   return await crypto.subtle.importKey(
     "raw",
     enc.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    [usage]
+    [usage],
   );
 }
 
 export async function signJWT(
   payload: Omit<JWTPayload, "iat" | "exp">,
-  expiresInSeconds: number = 7 * 24 * 60 * 60
+  expiresInSeconds: number = 7 * 24 * 60 * 60,
 ): Promise<string> {
-  const secret = process.env.JWT_SECRET ;
+  const secret = getJWTSecret();
+
   const header = { alg: "HS256", typ: "JWT" };
   const now = Math.floor(Date.now() / 1000);
 
@@ -71,16 +86,19 @@ export async function signJWT(
 
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
   const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
+
   const dataToSign = `${encodedHeader}.${encodedPayload}`;
 
   const key = await getCryptoKey(secret, "sign");
+
   const signature = await crypto.subtle.sign(
     "HMAC",
     key,
-    new TextEncoder().encode(dataToSign)
+    new TextEncoder().encode(dataToSign),
   );
 
   const encodedSignature = base64UrlEncode(new Uint8Array(signature));
+
   return `${dataToSign}.${encodedSignature}`;
 }
 
@@ -91,7 +109,8 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
     if (parts.length !== 3) return null;
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts;
-    const secret = process.env.JWT_SECRET ;
+
+    const secret = getJWTSecret();
     const dataToVerify = `${encodedHeader}.${encodedPayload}`;
 
     const key = await getCryptoKey(secret, "verify");
@@ -114,8 +133,8 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
     const isValid = await crypto.subtle.verify(
       "HMAC",
       key,
-      rawSig,
-      new TextEncoder().encode(dataToVerify)
+      rawSig as BufferSource,
+      new TextEncoder().encode(dataToVerify),
     );
 
     if (!isValid) return null;

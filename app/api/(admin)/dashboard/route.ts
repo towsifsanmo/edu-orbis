@@ -22,7 +22,10 @@ export async function GET(req: Request) {
   try {
     const admin = await requireAdmin();
     if (!admin) {
-      return errorResponse("অননুমোদিত অ্যাক্সেস। শুধুমাত্র অ্যাডমিনদের জন্য।", 403);
+      return errorResponse(
+        "অননুমোদিত অ্যাক্সেস। শুধুমাত্র অ্যাডমিনদের জন্য।",
+        403,
+      );
     }
 
     await dbConnect();
@@ -50,13 +53,13 @@ export async function GET(req: Request) {
             .limit(5)
             .populate("packageId")
             .lean(),
-          Billing.find({})
-            .sort({ date: -1 })
-            .limit(5)
-            .lean(),
+          Billing.find({}).sort({ date: -1 }).limit(5).lean(),
         ]);
 
-        const totalRevenue = allBillings.reduce((sum, b) => sum + (b.amount || 0), 0);
+        const totalRevenue = allBillings.reduce(
+          (sum, b) => sum + (b.amount || 0),
+          0,
+        );
 
         const notifications = [
           {
@@ -113,18 +116,22 @@ export async function GET(req: Request) {
           .populate("packageId")
           .lean();
 
-        return successResponse("Subscribers data সফলভাবে পাওয়া গেছে।", subscribers);
+        return successResponse(
+          "Subscribers data সফলভাবে পাওয়া গেছে।",
+          subscribers,
+        );
       }
 
       // =========================
       // Pricing
       // =========================
       case "pricing": {
-        const pricing = await Pricing.find({})
-          .sort({ createdAt: -1 })
-          .lean();
+        const pricing = await Pricing.find({}).sort({ createdAt: -1 }).lean();
 
-        return successResponse("প্রাইসিং প্ল্যান সফলভাবে পাওয়া গেছে।", pricing);
+        return successResponse(
+          "প্রাইসিং প্ল্যান সফলভাবে পাওয়া গেছে।",
+          pricing,
+        );
       }
 
       // =========================
@@ -157,7 +164,10 @@ export async function GET(req: Request) {
           .sort({ createdAt: -1 })
           .lean();
 
-        return successResponse("টেস্টিমোনিয়াল ডেটা সফলভাবে পাওয়া গেছে।", testimonials);
+        return successResponse(
+          "টেস্টিমোনিয়াল ডেটা সফলভাবে পাওয়া গেছে।",
+          testimonials,
+        );
       }
 
       // =========================
@@ -165,13 +175,16 @@ export async function GET(req: Request) {
       // =========================
       case "settings": {
         let setting = await Setting.findOne().lean();
+
         if (!setting) {
-          setting = {
-            siteName: "এডুস্যাস প্রো - স্কুল ম্যানেজমেন্ট",
-            adminEmail: "admin@edusaas.com",
-            supportPhone: "+880 1711223344",
-            supportEmail: "support@edusaas.com",
-          };
+          const createdSetting = await Setting.create({
+            siteName: "",
+            adminEmail: "",
+            supportPhone: "+",
+            supportEmail: "",
+          });
+
+          setting = createdSetting.toObject();
         }
 
         return successResponse("সেটিংস ডেটা সফলভাবে পাওয়া গেছে।", setting);
