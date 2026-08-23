@@ -120,12 +120,12 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
-  // Navigation State
+  
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Data States
+  
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeSubscribers: 0,
@@ -134,6 +134,7 @@ export default function AdminDashboardPage() {
   });
   const [users, setUsers] = useState<User[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  console.log(plans);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [billings, setBillings] = useState<Billing[]>([]);
@@ -145,10 +146,10 @@ export default function AdminDashboardPage() {
 
   // Settings Form State
   const [settingsForm, setSettingsForm] = useState({
-    siteName: "এডুস্যাস প্রো - স্কুল ম্যানেজমেন্ট",
-    adminEmail: "admin@edusaas.com",
-    supportPhone: "+880 1711223344",
-    supportEmail: "support@edusaas.com",
+    siteName: "",
+    adminEmail: "",
+    supportPhone: "",
+    supportEmail: "",
     currentPassword: "",
     newPassword: "",
   });
