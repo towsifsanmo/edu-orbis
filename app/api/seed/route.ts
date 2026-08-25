@@ -20,7 +20,6 @@ async function handleSeed() {
   try {
     await dbConnect();
 
-    // 1. Seed Pricing Plans
     const defaultPlans = [
       {
         name: "স্টার্টার (Starter)",
